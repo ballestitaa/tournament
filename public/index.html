@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Team Schedule</title>
-<script>
+  <script>
     (function() {
       var isTournament = window.location.pathname.startsWith('/tournament');
       var baseHref = isTournament ? '/tournament/' : '/';
@@ -284,6 +284,18 @@
 
     $('#copy-toast-link').innerHTML = ICONS.copy;
 
+    // Helper robusto para parsear respuestas JSON o capturar errores HTML
+    async function parseJsonResponse(res) {
+      var contentType = res.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        var text = await res.text();
+        throw new Error('El servidor respondió con HTML en lugar de JSON (HTTP ' + res.status + '). Revisa la ruta de rewrite de Vercel y las variables de Upstash.');
+      }
+      var data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error en la petición (HTTP ' + res.status + ')');
+      return data;
+    }
+
     // --- State ---
     let currentPin = null;
     let currentCapitan = null;
@@ -315,8 +327,7 @@
 
       try {
         const res = await fetch(`api/capitanes/${pin}`);
-        if (!res.ok) throw new Error('PIN no encontrado');
-        const data = await res.json();
+        const data = await parseJsonResponse(res);
 
         currentPin = pin;
         currentCapitan = data;
@@ -344,8 +355,7 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ nombre })
         });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error);
+        const data = await parseJsonResponse(res);
 
         currentPin = data.pin;
 
@@ -363,7 +373,7 @@
 
         $('#reveal-continue').onclick = async () => {
           const r = await fetch(`api/capitanes/${data.pin}`);
-          currentCapitan = await r.json();
+          currentCapitan = await parseJsonResponse(r);
           showDashboard(currentCapitan);
         };
       } catch (err) {
@@ -453,10 +463,10 @@
           if (!confirm(`¿Eliminar la sala "${room.nombre}"?`)) return;
           try {
             const res = await fetch(`api/salas/${room.codigo}?clave=${room.claveAdmin}`, { method: 'DELETE' });
-            if (!res.ok) throw new Error();
+            await parseJsonResponse(res);
             await refreshDashboard();
-          } catch {
-            alert('Error al eliminar la sala');
+          } catch (err) {
+            alert('Error al eliminar la sala: ' + err.message);
           }
         });
 
@@ -482,8 +492,7 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ nombre, pin: currentPin })
         });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error);
+        const data = await parseJsonResponse(res);
 
         $('#new-room-name').value = '';
 
@@ -524,8 +533,7 @@
     async function refreshDashboard() {
       try {
         const res = await fetch(`api/capitanes/${currentPin}`);
-        if (!res.ok) throw new Error();
-        currentCapitan = await res.json();
+        currentCapitan = await parseJsonResponse(res);
         renderRoomList(currentCapitan.salas);
       } catch {}
     }
