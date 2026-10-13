@@ -1,7 +1,8 @@
+require('dotenv').config();
 const express = require('express');
 const crypto = require('crypto');
 const path = require('path');
-const fs = require('fs');
+const { Redis } = require('@upstash/redis');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -10,54 +11,27 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// --- Persistent JSON store ---
-const DATA_DIR = path.join(__dirname, 'data');
-const DATA_FILE = path.join(DATA_DIR, 'db.json');
-
-// Ensure data directory exists
-if (!fs.existsSync(DATA_DIR)) {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
+// --- Redis Client (Upstash REST) ---
+let redis = null;
+if (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) {
+  redis = new Redis({
+    url: process.env.UPSTASH_REDIS_REST_URL,
+    token: process.env.UPSTASH_REDIS_REST_TOKEN,
+  });
+} else {
+  console.warn('⚠️  Variables UPSTASH_REDIS_REST_URL y UPSTASH_REDIS_REST_TOKEN no configuradas. Redis no estará disponible hasta configurarlas.');
 }
 
-// Load existing data or start fresh
-let db = { salas: {}, capitanes: {} };
-try {
-  if (fs.existsSync(DATA_FILE)) {
-    db = { ...db, ...JSON.parse(fs.readFileSync(DATA_FILE, 'utf-8')) };
-    console.log(`  📂 Cargados ${Object.keys(db.capitanes).length} capitán(es) y ${Object.keys(db.salas).length} sala(s)`);
+function getRedisClient() {
+  if (!redis) {
+    throw new Error('Base de datos no configurada. Revisa UPSTASH_REDIS_REST_URL y UPSTASH_REDIS_REST_TOKEN.');
   }
-  // Migrate from old format (salas.json) if db.json doesn't exist
-  const OLD_FILE = path.join(DATA_DIR, 'salas.json');
-  if (!fs.existsSync(DATA_FILE) && fs.existsSync(OLD_FILE)) {
-    const oldSalas = JSON.parse(fs.readFileSync(OLD_FILE, 'utf-8'));
-    db.salas = oldSalas;
-    console.log(`  🔄 Migradas ${Object.keys(oldSalas).length} sala(s) desde formato anterior`);
-  }
-} catch (err) {
-  console.error('  ⚠️  Error leyendo datos, empezando de cero:', err.message);
+  return redis;
 }
 
-const salas = new Map(Object.entries(db.salas));
-const capitanes = new Map(Object.entries(db.capitanes));
-
-// Save to disk (atomic: write tmp then rename)
-let saveTimer = null;
-function guardarDatos() {
-  if (saveTimer) clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => {
-    const data = {
-      salas: Object.fromEntries(salas),
-      capitanes: Object.fromEntries(capitanes)
-    };
-    const tmp = DATA_FILE + '.tmp';
-    try {
-      fs.writeFileSync(tmp, JSON.stringify(data, null, 2), 'utf-8');
-      fs.renameSync(tmp, DATA_FILE);
-    } catch (err) {
-      console.error('  ⚠️  Error guardando datos:', err.message);
-    }
-  }, 200);
-}
+// Helpers de claves Redis
+const KEY_SALA = (codigo) => `sala:${codigo.toUpperCase()}`;
+const KEY_CAPITAN = (pin) => `capitan:${pin.toUpperCase()}`;
 
 function generarCodigo(len = 6) {
   return crypto.randomBytes(len).toString('base64url').slice(0, len).toUpperCase();
@@ -68,184 +42,265 @@ function generarCodigo(len = 6) {
 // =============================================
 
 // Registrar capitán — devuelve un PIN de 6 caracteres
-app.post('/api/capitanes', (req, res) => {
-  const { nombre } = req.body;
-  if (!nombre || !nombre.trim()) {
-    return res.status(400).json({ error: 'El nombre es obligatorio' });
+app.post('/api/capitanes', async (req, res) => {
+  try {
+    const db = getRedisClient();
+    const { nombre } = req.body;
+    if (!nombre || !nombre.trim()) {
+      return res.status(400).json({ error: 'El nombre es obligatorio' });
+    }
+
+    let pin;
+    let exists = true;
+    while (exists) {
+      pin = generarCodigo(6);
+      exists = await db.exists(KEY_CAPITAN(pin));
+    }
+
+    const capitanData = {
+      nombre: nombre.trim(),
+      pin,
+      salas: [], // Array de room codes
+      creadoEn: Date.now()
+    };
+
+    await db.set(KEY_CAPITAN(pin), capitanData);
+    res.json({ pin, nombre: nombre.trim() });
+  } catch (err) {
+    console.error('Error registrando capitán:', err);
+    res.status(500).json({ error: err.message || 'Error interno del servidor' });
   }
-
-  let pin;
-  do { pin = generarCodigo(6); } while (capitanes.has(pin));
-
-  capitanes.set(pin, {
-    nombre: nombre.trim(),
-    pin,
-    salas: [],        // array of room codes
-    creadoEn: Date.now()
-  });
-
-  guardarDatos();
-  res.json({ pin, nombre: nombre.trim() });
 });
 
 // Login capitán — devuelve perfil + sus salas con detalles
-app.get('/api/capitanes/:pin', (req, res) => {
-  const cap = capitanes.get(req.params.pin.toUpperCase());
-  if (!cap) return res.status(404).json({ error: 'PIN no encontrado' });
+app.get('/api/capitanes/:pin', async (req, res) => {
+  try {
+    const db = getRedisClient();
+    const pin = req.params.pin.toUpperCase();
+    const cap = await db.get(KEY_CAPITAN(pin));
 
-  // Build room list with live info
-  const salasDetalle = cap.salas
-    .map(codigo => salas.get(codigo))
-    .filter(Boolean)
-    .map(s => ({
-      codigo: s.codigo,
-      nombre: s.nombre,
-      claveAdmin: s.claveAdmin,
-      jugadores: s.jugadores.length,
-      creadoEn: s.creadoEn
-    }));
+    if (!cap) {
+      return res.status(404).json({ error: 'PIN no encontrado' });
+    }
 
-  res.json({
-    nombre: cap.nombre,
-    pin: cap.pin,
-    salas: salasDetalle
-  });
+    // Obtener detalles de cada sala asociada
+    const codigos = Array.isArray(cap.salas) ? cap.salas : [];
+    let salasDetalle = [];
+
+    if (codigos.length > 0) {
+      const keys = codigos.map(KEY_SALA);
+      // MGET para traer todas las salas en una sola llamada de red
+      const rawSalas = await db.mget(...keys);
+
+      salasDetalle = rawSalas
+        .filter(Boolean)
+        .map(s => ({
+          codigo: s.codigo,
+          nombre: s.nombre,
+          claveAdmin: s.claveAdmin,
+          jugadores: (s.jugadores || []).length,
+          creadoEn: s.creadoEn
+        }));
+    }
+
+    res.json({
+      nombre: cap.nombre,
+      pin: cap.pin,
+      salas: salasDetalle
+    });
+  } catch (err) {
+    console.error('Error consultando capitán:', err);
+    res.status(500).json({ error: err.message || 'Error interno del servidor' });
+  }
 });
 
 // =============================================
 //  ROOM API
 // =============================================
 
-// Crear sala (optionally linked to a captain via pin)
-app.post('/api/salas', (req, res) => {
-  const { nombre, pin } = req.body;
-  if (!nombre || !nombre.trim()) {
-    return res.status(400).json({ error: 'El nombre del equipo es obligatorio' });
-  }
-
-  let codigo;
-  do { codigo = generarCodigo(6); } while (salas.has(codigo));
-
-  const claveAdmin = generarCodigo(16);
-
-  salas.set(codigo, {
-    nombre: nombre.trim(),
-    codigo,
-    claveAdmin,
-    jugadores: [],
-    capitanPin: pin || null,
-    creadoEn: Date.now()
-  });
-
-  // Link to captain if pin provided
-  if (pin) {
-    const cap = capitanes.get(pin.toUpperCase());
-    if (cap) {
-      cap.salas.push(codigo);
+// Crear sala (vinculada opcionalmente al capitán por pin)
+app.post('/api/salas', async (req, res) => {
+  try {
+    const db = getRedisClient();
+    const { nombre, pin } = req.body;
+    if (!nombre || !nombre.trim()) {
+      return res.status(400).json({ error: 'El nombre del equipo es obligatorio' });
     }
-  }
 
-  guardarDatos();
-  res.json({ codigo, claveAdmin, nombre: nombre.trim() });
+    let codigo;
+    let exists = true;
+    while (exists) {
+      codigo = generarCodigo(6);
+      exists = await db.exists(KEY_SALA(codigo));
+    }
+
+    const claveAdmin = generarCodigo(16);
+
+    const salaData = {
+      nombre: nombre.trim(),
+      codigo,
+      claveAdmin,
+      jugadores: [],
+      capitanPin: pin ? pin.toUpperCase() : null,
+      creadoEn: Date.now()
+    };
+
+    await db.set(KEY_SALA(codigo), salaData);
+
+    // Si viene asociado a un capitán, actualizar su lista de salas
+    if (pin) {
+      const capKey = KEY_CAPITAN(pin);
+      const cap = await db.get(capKey);
+      if (cap) {
+        if (!Array.isArray(cap.salas)) cap.salas = [];
+        cap.salas.push(codigo);
+        await db.set(capKey, cap);
+      }
+    }
+
+    res.json({ codigo, claveAdmin, nombre: nombre.trim() });
+  } catch (err) {
+    console.error('Error creando sala:', err);
+    res.status(500).json({ error: err.message || 'Error interno del servidor' });
+  }
 });
 
-// Info pública de la sala
-app.get('/api/salas/:codigo', (req, res) => {
-  const sala = salas.get(req.params.codigo.toUpperCase());
-  if (!sala) return res.status(404).json({ error: 'Sala no encontrada' });
+// Info pública de la sala (para el jugador al ingresar)
+app.get('/api/salas/:codigo', async (req, res) => {
+  try {
+    const db = getRedisClient();
+    const sala = await db.get(KEY_SALA(req.params.codigo));
+    if (!sala) return res.status(404).json({ error: 'Sala no encontrada' });
 
-  res.json({
-    nombre: sala.nombre,
-    codigo: sala.codigo,
-    totalJugadores: sala.jugadores.length
-  });
+    res.json({
+      nombre: sala.nombre,
+      codigo: sala.codigo,
+      totalJugadores: (sala.jugadores || []).length
+    });
+  } catch (err) {
+    console.error('Error obteniendo sala:', err);
+    res.status(500).json({ error: err.message || 'Error interno del servidor' });
+  }
 });
 
 // Enviar disponibilidad (jugador)
-app.post('/api/salas/:codigo/disponibilidad', (req, res) => {
-  const sala = salas.get(req.params.codigo.toUpperCase());
-  if (!sala) return res.status(404).json({ error: 'Sala no encontrada' });
+app.post('/api/salas/:codigo/disponibilidad', async (req, res) => {
+  try {
+    const db = getRedisClient();
+    const salaKey = KEY_SALA(req.params.codigo);
+    const sala = await db.get(salaKey);
+    if (!sala) return res.status(404).json({ error: 'Sala no encontrada' });
 
-  const { nombre, slots } = req.body;
-  if (!nombre || !nombre.trim()) {
-    return res.status(400).json({ error: 'El nombre es obligatorio' });
+    const { nombre, slots } = req.body;
+    if (!nombre || !nombre.trim()) {
+      return res.status(400).json({ error: 'El nombre es obligatorio' });
+    }
+    if (!Array.isArray(slots)) {
+      return res.status(400).json({ error: 'Los slots deben ser un array' });
+    }
+
+    if (!Array.isArray(sala.jugadores)) {
+      sala.jugadores = [];
+    }
+
+    const idx = sala.jugadores.findIndex(j => j.nombre.toLowerCase() === nombre.trim().toLowerCase());
+    const jugador = { nombre: nombre.trim(), slots, enviadoEn: Date.now() };
+
+    if (idx !== -1) {
+      sala.jugadores[idx] = jugador;
+    } else {
+      sala.jugadores.push(jugador);
+    }
+
+    await db.set(salaKey, sala);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Error guardando disponibilidad:', err);
+    res.status(500).json({ error: err.message || 'Error interno del servidor' });
   }
-  if (!Array.isArray(slots)) {
-    return res.status(400).json({ error: 'Los slots deben ser un array' });
-  }
-
-  const idx = sala.jugadores.findIndex(j => j.nombre.toLowerCase() === nombre.trim().toLowerCase());
-  const jugador = { nombre: nombre.trim(), slots, enviadoEn: Date.now() };
-
-  if (idx !== -1) {
-    sala.jugadores[idx] = jugador;
-  } else {
-    sala.jugadores.push(jugador);
-  }
-
-  guardarDatos();
-  res.json({ ok: true });
 });
 
 // Panel del capitán (requiere clave admin)
-app.get('/api/salas/:codigo/panel', (req, res) => {
-  const sala = salas.get(req.params.codigo.toUpperCase());
-  if (!sala) return res.status(404).json({ error: 'Sala no encontrada' });
+app.get('/api/salas/:codigo/panel', async (req, res) => {
+  try {
+    const db = getRedisClient();
+    const sala = await db.get(KEY_SALA(req.params.codigo));
+    if (!sala) return res.status(404).json({ error: 'Sala no encontrada' });
 
-  if (req.query.clave !== sala.claveAdmin) {
-    return res.status(403).json({ error: 'Clave de administrador incorrecta' });
+    if (req.query.clave !== sala.claveAdmin) {
+      return res.status(403).json({ error: 'Clave de administrador incorrecta' });
+    }
+
+    res.json({
+      nombre: sala.nombre,
+      codigo: sala.codigo,
+      jugadores: (sala.jugadores || []).map(j => ({
+        nombre: j.nombre,
+        slots: j.slots,
+        enviadoEn: j.enviadoEn
+      }))
+    });
+  } catch (err) {
+    console.error('Error obteniendo panel:', err);
+    res.status(500).json({ error: err.message || 'Error interno del servidor' });
   }
-
-  res.json({
-    nombre: sala.nombre,
-    codigo: sala.codigo,
-    jugadores: sala.jugadores.map(j => ({
-      nombre: j.nombre,
-      slots: j.slots,
-      enviadoEn: j.enviadoEn
-    }))
-  });
 });
 
-// Eliminar jugador (capitán)
-app.delete('/api/salas/:codigo/jugadores/:nombre', (req, res) => {
-  const sala = salas.get(req.params.codigo.toUpperCase());
-  if (!sala) return res.status(404).json({ error: 'Sala no encontrada' });
+// Eliminar jugador de la sala (capitán)
+app.delete('/api/salas/:codigo/jugadores/:nombre', async (req, res) => {
+  try {
+    const db = getRedisClient();
+    const salaKey = KEY_SALA(req.params.codigo);
+    const sala = await db.get(salaKey);
+    if (!sala) return res.status(404).json({ error: 'Sala no encontrada' });
 
-  if (req.query.clave !== sala.claveAdmin) {
-    return res.status(403).json({ error: 'Clave de administrador incorrecta' });
+    if (req.query.clave !== sala.claveAdmin) {
+      return res.status(403).json({ error: 'Clave de administrador incorrecta' });
+    }
+
+    const nombreBuscar = decodeURIComponent(req.params.nombre).toLowerCase();
+    sala.jugadores = (sala.jugadores || []).filter(j => j.nombre.toLowerCase() !== nombreBuscar);
+
+    await db.set(salaKey, sala);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Error eliminando jugador:', err);
+    res.status(500).json({ error: err.message || 'Error interno del servidor' });
   }
-
-  const nombreBuscar = decodeURIComponent(req.params.nombre).toLowerCase();
-  sala.jugadores = sala.jugadores.filter(j => j.nombre.toLowerCase() !== nombreBuscar);
-
-  guardarDatos();
-  res.json({ ok: true });
 });
 
 // Eliminar sala (capitán)
-app.delete('/api/salas/:codigo', (req, res) => {
-  const sala = salas.get(req.params.codigo.toUpperCase());
-  if (!sala) return res.status(404).json({ error: 'Sala no encontrada' });
+app.delete('/api/salas/:codigo', async (req, res) => {
+  try {
+    const db = getRedisClient();
+    const salaKey = KEY_SALA(req.params.codigo);
+    const sala = await db.get(salaKey);
+    if (!sala) return res.status(404).json({ error: 'Sala no encontrada' });
 
-  if (req.query.clave !== sala.claveAdmin) {
-    return res.status(403).json({ error: 'Clave de administrador incorrecta' });
-  }
-
-  // Remove from captain's list
-  if (sala.capitanPin) {
-    const cap = capitanes.get(sala.capitanPin);
-    if (cap) {
-      cap.salas = cap.salas.filter(c => c !== sala.codigo);
+    if (req.query.clave !== sala.claveAdmin) {
+      return res.status(403).json({ error: 'Clave de administrador incorrecta' });
     }
-  }
 
-  salas.delete(sala.codigo);
-  guardarDatos();
-  res.json({ ok: true });
+    // Si tiene capitán asociado, desvincularla de su perfil
+    if (sala.capitanPin) {
+      const capKey = KEY_CAPITAN(sala.capitanPin);
+      const cap = await db.get(capKey);
+      if (cap && Array.isArray(cap.salas)) {
+        cap.salas = cap.salas.filter(c => c !== sala.codigo);
+        await db.set(capKey, cap);
+      }
+    }
+
+    // Eliminar la clave de la sala
+    await db.del(salaKey);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Error eliminando sala:', err);
+    res.status(500).json({ error: err.message || 'Error interno del servidor' });
+  }
 });
 
-// SPA fallback
+// SPA fallback para rutas no estáticas y no API
 app.get('*', (req, res) => {
   if (!req.path.startsWith('/api') && !path.extname(req.path)) {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
@@ -254,6 +309,11 @@ app.get('*', (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`\n  ⚡ Servidor activo en http://localhost:${PORT}\n`);
-});
+// Condicional para ejecución local vs serverless (Vercel)
+if (process.env.VERCEL !== '1' && require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`\n  ⚡ Servidor activo en http://localhost:${PORT}\n`);
+  });
+}
+
+module.exports = app;
