@@ -9,7 +9,10 @@ const PORT = process.env.PORT || 3000;
 
 // --- Middleware ---
 app.use(express.json());
+
+// Servir archivos estáticos tanto en la raíz como bajo /tournament
 app.use(express.static(path.join(__dirname, 'public')));
+app.use('/tournament', express.static(path.join(__dirname, 'public')));
 
 // --- Redis Client (Upstash REST) ---
 let redis = null;
@@ -38,11 +41,12 @@ function generarCodigo(len = 6) {
 }
 
 // =============================================
-//  CAPTAIN API
+//  API ROUTER (funciona en /api y /tournament/api)
 // =============================================
+const apiRouter = express.Router();
 
 // Registrar capitán — devuelve un PIN de 6 caracteres
-app.post('/api/capitanes', async (req, res) => {
+apiRouter.post('/capitanes', async (req, res) => {
   try {
     const db = getRedisClient();
     const { nombre } = req.body;
@@ -73,7 +77,7 @@ app.post('/api/capitanes', async (req, res) => {
 });
 
 // Login capitán — devuelve perfil + sus salas con detalles
-app.get('/api/capitanes/:pin', async (req, res) => {
+apiRouter.get('/capitanes/:pin', async (req, res) => {
   try {
     const db = getRedisClient();
     const pin = req.params.pin.toUpperCase();
@@ -114,12 +118,8 @@ app.get('/api/capitanes/:pin', async (req, res) => {
   }
 });
 
-// =============================================
-//  ROOM API
-// =============================================
-
 // Crear sala (vinculada opcionalmente al capitán por pin)
-app.post('/api/salas', async (req, res) => {
+apiRouter.post('/salas', async (req, res) => {
   try {
     const db = getRedisClient();
     const { nombre, pin } = req.body;
@@ -166,7 +166,7 @@ app.post('/api/salas', async (req, res) => {
 });
 
 // Info pública de la sala (para el jugador al ingresar)
-app.get('/api/salas/:codigo', async (req, res) => {
+apiRouter.get('/salas/:codigo', async (req, res) => {
   try {
     const db = getRedisClient();
     const sala = await db.get(KEY_SALA(req.params.codigo));
@@ -184,7 +184,7 @@ app.get('/api/salas/:codigo', async (req, res) => {
 });
 
 // Enviar disponibilidad (jugador)
-app.post('/api/salas/:codigo/disponibilidad', async (req, res) => {
+apiRouter.post('/salas/:codigo/disponibilidad', async (req, res) => {
   try {
     const db = getRedisClient();
     const salaKey = KEY_SALA(req.params.codigo);
@@ -221,7 +221,7 @@ app.post('/api/salas/:codigo/disponibilidad', async (req, res) => {
 });
 
 // Panel del capitán (requiere clave admin)
-app.get('/api/salas/:codigo/panel', async (req, res) => {
+apiRouter.get('/salas/:codigo/panel', async (req, res) => {
   try {
     const db = getRedisClient();
     const sala = await db.get(KEY_SALA(req.params.codigo));
@@ -247,7 +247,7 @@ app.get('/api/salas/:codigo/panel', async (req, res) => {
 });
 
 // Eliminar jugador de la sala (capitán)
-app.delete('/api/salas/:codigo/jugadores/:nombre', async (req, res) => {
+apiRouter.delete('/salas/:codigo/jugadores/:nombre', async (req, res) => {
   try {
     const db = getRedisClient();
     const salaKey = KEY_SALA(req.params.codigo);
@@ -270,7 +270,7 @@ app.delete('/api/salas/:codigo/jugadores/:nombre', async (req, res) => {
 });
 
 // Eliminar sala (capitán)
-app.delete('/api/salas/:codigo', async (req, res) => {
+apiRouter.delete('/salas/:codigo', async (req, res) => {
   try {
     const db = getRedisClient();
     const salaKey = KEY_SALA(req.params.codigo);
@@ -300,9 +300,25 @@ app.delete('/api/salas/:codigo', async (req, res) => {
   }
 });
 
+// Montar el router API en ambas rutas: raíz y /tournament
+app.use('/api', apiRouter);
+app.use('/tournament/api', apiRouter);
+
+// Rutas directas para servir páginas HTML tanto en raíz como en /tournament
+app.get(['/tournament', '/tournament/index.html'], (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+app.get(['/tournament/jugador', '/tournament/jugador.html'], (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'jugador.html'));
+});
+app.get(['/tournament/panel', '/tournament/panel.html'], (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'panel.html'));
+});
+
 // SPA fallback para rutas no estáticas y no API
 app.get('*', (req, res) => {
-  if (!req.path.startsWith('/api') && !path.extname(req.path)) {
+  const p = req.path;
+  if (!p.startsWith('/api') && !p.startsWith('/tournament/api') && !path.extname(p)) {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
   } else {
     res.status(404).json({ error: 'No encontrado' });

@@ -4,7 +4,14 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Panel de Capitán | Team Schedule</title>
-  <link rel="stylesheet" href="/css/style.css">
+  <script>
+    (function() {
+      var isTournament = window.location.pathname.startsWith('/tournament');
+      var baseHref = isTournament ? '/tournament/' : '/';
+      document.write('<base href="' + baseHref + '">');
+    })();
+  </script>
+  <link rel="stylesheet" href="css/style.css">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2'><rect x='3' y='4' width='18' height='18' rx='2'/><line x1='16' y1='2' x2='16' y2='6'/><line x1='8' y1='2' x2='8' y2='6'/><line x1='3' y1='10' x2='21' y2='10'/></svg>">
 </head>
 <body>
@@ -25,7 +32,7 @@
         <p class="subtitle">La clave de administrador no es válida o la sala no existe.</p>
       </div>
       <div class="text-center">
-        <button class="btn btn-secondary" onclick="window.location.href='/'">Volver al inicio</button>
+        <button class="btn btn-secondary" id="back-home-btn">Volver al inicio</button>
       </div>
     </div>
 
@@ -116,6 +123,10 @@
     const $ = (s) => document.querySelector(s);
     const $$ = (s) => document.querySelectorAll(s);
 
+    $('#back-home-btn').onclick = () => {
+      window.location.href = document.baseURI;
+    };
+
     // --- State ---
     let roomCode = '';
     let adminKey = '';
@@ -139,15 +150,14 @@
 
     async function loadData() {
       try {
-        const res = await fetch(`/api/salas/${roomCode}/panel?clave=${adminKey}`);
+        const res = await fetch(`api/salas/${roomCode}/panel?clave=${adminKey}`);
         if (!res.ok) throw new Error();
         const data = await res.json();
 
         jugadores = data.jugadores;
         $('#panel-room-name').textContent = data.nombre;
 
-        const base = window.location.origin;
-        const shareLink = `${base}/jugador.html?sala=${roomCode}`;
+        const shareLink = new URL(`jugador.html?sala=${roomCode}`, document.baseURI).href;
         $('#share-link-text').textContent = shareLink;
         setupCopy('#copy-share-link', shareLink);
 
@@ -369,7 +379,7 @@
           if (!confirm(`¿Eliminar a ${j.nombre}?`)) return;
 
           try {
-            const res = await fetch(`/api/salas/${roomCode}/jugadores/${encodeURIComponent(j.nombre)}?clave=${adminKey}`, {
+            const res = await fetch(`api/salas/${roomCode}/jugadores/${encodeURIComponent(j.nombre)}?clave=${adminKey}`, {
               method: 'DELETE'
             });
             if (!res.ok) throw new Error();

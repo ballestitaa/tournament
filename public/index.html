@@ -4,7 +4,14 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Team Schedule</title>
-  <link rel="stylesheet" href="/css/style.css">
+  <script>
+    (function() {
+      var isTournament = window.location.pathname.startsWith('/tournament');
+      var baseHref = isTournament ? '/tournament/' : '/';
+      document.write('<base href="' + baseHref + '">');
+    })();
+  </script>
+  <link rel="stylesheet" href="css/style.css">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2'><rect x='3' y='4' width='18' height='18' rx='2'/><line x1='16' y1='2' x2='16' y2='6'/><line x1='8' y1='2' x2='8' y2='6'/><line x1='3' y1='10' x2='21' y2='10'/></svg>">
   <style>
     .role-grid {
@@ -307,7 +314,7 @@
       errEl.style.display = 'none';
 
       try {
-        const res = await fetch(`/api/capitanes/${pin}`);
+        const res = await fetch(`api/capitanes/${pin}`);
         if (!res.ok) throw new Error('PIN no encontrado');
         const data = await res.json();
 
@@ -332,7 +339,7 @@
       btn.disabled = true;
 
       try {
-        const res = await fetch('/api/capitanes', {
+        const res = await fetch('api/capitanes', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ nombre })
@@ -355,7 +362,7 @@
         };
 
         $('#reveal-continue').onclick = async () => {
-          const r = await fetch(`/api/capitanes/${data.pin}`);
+          const r = await fetch(`api/capitanes/${data.pin}`);
           currentCapitan = await r.json();
           showDashboard(currentCapitan);
         };
@@ -370,7 +377,7 @@
     $('#join-btn').addEventListener('click', () => {
       const code = $('#join-code').value.trim().toUpperCase();
       if (!code) { $('#join-code').focus(); return; }
-      window.location.href = `/jugador.html?sala=${code}`;
+      window.location.href = `jugador.html?sala=${code}`;
     });
     $('#join-code').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#join-btn').click(); });
 
@@ -417,9 +424,8 @@
           </div>
         `;
 
-        const base = window.location.origin;
-        const playerLink = `${base}/jugador.html?sala=${room.codigo}`;
-        const panelLink = `${base}/panel.html?sala=${room.codigo}&clave=${room.claveAdmin}`;
+        const playerLink = new URL(`jugador.html?sala=${room.codigo}`, document.baseURI).href;
+        const panelLink = new URL(`panel.html?sala=${room.codigo}&clave=${room.claveAdmin}`, document.baseURI).href;
 
         card.querySelector('.copy-link-btn').addEventListener('click', async (e) => {
           e.stopPropagation();
@@ -446,7 +452,7 @@
           e.stopPropagation();
           if (!confirm(`¿Eliminar la sala "${room.nombre}"?`)) return;
           try {
-            const res = await fetch(`/api/salas/${room.codigo}?clave=${room.claveAdmin}`, { method: 'DELETE' });
+            const res = await fetch(`api/salas/${room.codigo}?clave=${room.claveAdmin}`, { method: 'DELETE' });
             if (!res.ok) throw new Error();
             await refreshDashboard();
           } catch {
@@ -471,7 +477,7 @@
       btn.textContent = 'Creando…';
 
       try {
-        const res = await fetch('/api/salas', {
+        const res = await fetch('api/salas', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ nombre, pin: currentPin })
@@ -481,8 +487,7 @@
 
         $('#new-room-name').value = '';
 
-        const base = window.location.origin;
-        const playerLink = `${base}/jugador.html?sala=${data.codigo}`;
+        const playerLink = new URL(`jugador.html?sala=${data.codigo}`, document.baseURI).href;
         showToast(playerLink);
 
         await refreshDashboard();
@@ -518,7 +523,7 @@
     // --- Refresh ---
     async function refreshDashboard() {
       try {
-        const res = await fetch(`/api/capitanes/${currentPin}`);
+        const res = await fetch(`api/capitanes/${currentPin}`);
         if (!res.ok) throw new Error();
         currentCapitan = await res.json();
         renderRoomList(currentCapitan.salas);
