@@ -1,0 +1,137 @@
+{
+  "salas": {
+    "IYBHUJ": {
+      "nombre": "dedeadores",
+      "codigo": "IYBHUJ",
+      "claveAdmin": "BIIHNRSTWOVW3OCP",
+      "jugadores": [],
+      "creadoEn": 1791909692506
+    },
+    "A3NRB9": {
+      "nombre": "dedeadores",
+      "codigo": "A3NRB9",
+      "claveAdmin": "RLXJAZLA0WIRFIJD",
+      "jugadores": [
+        {
+          "nombre": "dasf",
+          "slots": [
+            "1-11",
+            "2-12",
+            "2-13",
+            "3-13",
+            "3-14",
+            "3-15",
+            "3-16",
+            "3-17",
+            "3-18",
+            "3-19",
+            "2-19",
+            "2-20",
+            "1-21",
+            "1-20",
+            "1-19",
+            "0-18",
+            "0-17",
+            "0-16",
+            "0-15",
+            "0-14",
+            "0-13",
+            "1-13"
+          ],
+          "enviadoEn": 1791909706482
+        },
+        {
+          "nombre": "2",
+          "slots": [
+            "1-11",
+            "2-11",
+            "3-11",
+            "4-11",
+            "4-12",
+            "5-12",
+            "5-13",
+            "4-14",
+            "3-15",
+            "2-15",
+            "1-15",
+            "4-15",
+            "5-15",
+            "6-15",
+            "4-16",
+            "3-16",
+            "2-16",
+            "1-17",
+            "2-18",
+            "3-18",
+            "4-19",
+            "5-20",
+            "5-21",
+            "4-21",
+            "3-21",
+            "2-20",
+            "1-20",
+            "2-19",
+            "3-19"
+          ],
+          "enviadoEn": 1791909714706
+        }
+      ],
+      "creadoEn": 1791909697234
+    },
+    "RIOIKO": {
+      "nombre": "dedeadores",
+      "codigo": "RIOIKO",
+      "claveAdmin": "QGMOYGZ6VYOAETKM",
+      "jugadores": [],
+      "creadoEn": 1791909723419
+    },
+    "7TVS_B": {
+      "nombre": "testeo",
+      "codigo": "7TVS_B",
+      "claveAdmin": "MSJCQZQNSGNRF2V7",
+      "jugadores": [],
+      "capitanPin": "KLJIEI",
+      "creadoEn": 1791910550618
+    }
+  },
+  "capitanes": {
+    "WVEVHW": {
+      "nombre": "test",
+      "pin": "WVEVHW",
+      "salas": [],
+      "creadoEn": 1791909980932
+    },
+    "UBNAOD": {
+      "nombre": "test",
+      "pin": "UBNAOD",
+      "salas": [],
+      "creadoEn": 1791910297027
+    },
+    "VVCLU8": {
+      "nombre": "test",
+      "pin": "VVCLU8",
+      "salas": [],
+      "creadoEn": 1791910303747
+    },
+    "9LKHUP": {
+      "nombre": "test",
+      "pin": "9LKHUP",
+      "salas": [],
+      "creadoEn": 1791910309996
+    },
+    "XSJ5VF": {
+      "nombre": "test",
+      "pin": "XSJ5VF",
+      "salas": [],
+      "creadoEn": 1791910319229
+    },
+    "KLJIEI": {
+      "nombre": "wallahi",
+      "pin": "KLJIEI",
+      "salas": [
+        "7TVS_B"
+      ],
+      "creadoEn": 1791910541984
+    }
+  }
+}

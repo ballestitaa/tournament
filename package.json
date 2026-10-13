@@ -1,0 +1,11 @@
+{
+  "name": "tournament-scheduler",
+  "version": "1.0.0",
+  "description": "Gestión visual de horarios para equipos de torneo",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.0"
+  }
+}

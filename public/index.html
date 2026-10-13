@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Team Schedule</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2'><rect x='3' y='4' width='18' height='18' rx='2'/><line x1='16' y1='2' x2='16' y2='6'/><line x1='8' y1='2' x2='8' y2='6'/><line x1='3' y1='10' x2='21' y2='10'/></svg>">
+  <style>
+    .role-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+      margin-top: 2rem;
+    }
+    @media (max-width: 640px) {
+      .role-grid { grid-template-columns: 1fr; }
+    }
+    .role-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 2rem 1.5rem;
+      text-align: center;
+      cursor: pointer;
+      transition: all var(--transition);
+    }
+    .role-card:hover {
+      border-color: var(--border-light);
+      transform: translateY(-2px);
+    }
+    .role-card .role-icon {
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-secondary);
+    }
+    .role-card:hover .role-icon { color: var(--text); }
+    .role-card h2 { margin-bottom: 0.5rem; }
+    .role-card p { color: var(--text-secondary); font-size: 0.875rem; }
+
+    .cap-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 2rem;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+    .cap-header .pin-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 0.4rem 0.75rem;
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+    }
+    .cap-header .pin-badge strong {
+      color: var(--text);
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      letter-spacing: 0.1em;
+    }
+    .room-list { display: flex; flex-direction: column; gap: 0.75rem; }
+    .room-card {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1rem 1.25rem;
+      transition: all var(--transition);
+      cursor: pointer;
+    }
+    .room-card:hover {
+      border-color: var(--border-light);
+      background: var(--card-hover);
+    }
+    .room-card .room-code {
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-weight: 700;
+      font-size: 0.8rem;
+      letter-spacing: 0.1em;
+      color: var(--text-muted);
+      background: var(--surface);
+      padding: 0.3rem 0.6rem;
+      border-radius: var(--radius-sm);
+      flex-shrink: 0;
+    }
+    .room-card .room-info { flex: 1; }
+    .room-card .room-info h3 { font-size: 0.95rem; margin-bottom: 0.15rem; }
+    .room-card .room-info span { font-size: 0.8rem; color: var(--text-secondary); }
+    .room-card .room-actions {
+      display: flex;
+      gap: 0.4rem;
+      flex-shrink: 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- ====================== -->
+    <!--  VIEW 1: Role Select   -->
+    <!-- ====================== -->
+    <div id="role-view">
+      <div class="header">
+        <div class="logo">Team Schedule <span class="watermark-inline">by ballestitaa</span></div>
+        <h1>Gestión de Horarios</h1>
+        <p class="subtitle">Organiza la disponibilidad de tu equipo para torneos</p>
+      </div>
+
+      <div class="role-grid">
+        <div class="role-card" id="role-captain">
+          <div class="role-icon">
+            <svg class="icon icon-xl" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          </div>
+          <h2>Soy Capitán</h2>
+          <p>Crea salas y gestiona los horarios de tu equipo</p>
+        </div>
+        <div class="role-card" id="role-player">
+          <div class="role-icon">
+            <svg class="icon icon-xl" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          </div>
+          <h2>Soy Jugador</h2>
+          <p>Introduce el código de sala y envía tu disponibilidad</p>
+        </div>
+      </div>
+      <footer class="watermark">ballestitaa</footer>
+    </div>
+
+    <!-- ====================== -->
+    <!--  VIEW 2: Captain Auth  -->
+    <!-- ====================== -->
+    <div id="auth-view" class="hidden">
+      <div class="header">
+        <div class="logo">Team Schedule <span class="watermark-inline">by ballestitaa</span></div>
+        <h1>Capitán</h1>
+        <p class="subtitle">Accede con tu PIN o crea un perfil nuevo</p>
+      </div>
+
+      <div class="home-grid">
+        <div class="card">
+          <h2>Ya tengo PIN</h2>
+          <p>Introduce tu PIN de 6 caracteres para acceder.</p>
+          <div class="input-group">
+            <input type="text" id="login-pin" placeholder="Tu PIN" maxlength="6" autocomplete="off" style="text-transform:uppercase; letter-spacing:0.15em; font-weight:700; text-align:center; font-size:1.1rem">
+            <button class="btn btn-primary" id="login-btn">Entrar</button>
+          </div>
+          <div id="login-error" class="mt-1" style="color:var(--danger); font-size:0.8rem; display:none"></div>
+        </div>
+        <div class="card">
+          <h2>Crear perfil</h2>
+          <p>¿Primera vez? Introduce tu nombre y te asignaremos un PIN.</p>
+          <div class="input-group">
+            <input type="text" id="register-name" placeholder="Tu nombre" maxlength="30" autocomplete="off">
+            <button class="btn btn-secondary" id="register-btn">Crear</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="text-center mt-2">
+        <button class="btn btn-secondary" id="back-to-role" style="font-size:0.8rem">← Volver</button>
+      </div>
+      <footer class="watermark">ballestitaa</footer>
+    </div>
+
+    <!-- ====================== -->
+    <!--  VIEW 3: PIN Reveal    -->
+    <!-- ====================== -->
+    <div id="pin-reveal-view" class="hidden">
+      <div class="card success-state fade-in" style="max-width:460px; margin:3rem auto">
+        <div class="success-icon">
+          <svg class="icon icon-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        </div>
+        <h2>Perfil creado</h2>
+        <p class="subtitle mt-1">Hola, <strong id="reveal-name"></strong>. Este es tu PIN de acceso:</p>
+
+        <div class="room-code-display" id="reveal-pin" style="cursor:pointer" title="Click para copiar"></div>
+        <p style="font-size:0.75rem; color:var(--text-muted)">Guárdalo — lo necesitarás para volver a acceder</p>
+
+        <button class="btn btn-primary mt-3" id="reveal-continue" style="width:100%">Continuar al panel</button>
+      </div>
+      <footer class="watermark">ballestitaa</footer>
+    </div>
+
+    <!-- ====================== -->
+    <!--  VIEW 4: Player Join   -->
+    <!-- ====================== -->
+    <div id="player-view" class="hidden">
+      <div class="header">
+        <div class="logo">Team Schedule <span class="watermark-inline">by ballestitaa</span></div>
+        <h1>Unirse a sala</h1>
+        <p class="subtitle">Introduce el código que te ha dado tu capitán</p>
+      </div>
+
+      <div class="card" style="max-width:420px; margin:0 auto">
+        <div class="input-group">
+          <input type="text" id="join-code" placeholder="Código de sala" maxlength="10" autocomplete="off" style="text-transform:uppercase; letter-spacing:0.1em; font-weight:600; text-align:center; font-size:1.1rem">
+          <button class="btn btn-primary" id="join-btn">Entrar</button>
+        </div>
+      </div>
+
+      <div class="text-center mt-2">
+        <button class="btn btn-secondary" id="back-to-role-2" style="font-size:0.8rem">← Volver</button>
+      </div>
+      <footer class="watermark">ballestitaa</footer>
+    </div>
+
+    <!-- ====================== -->
+    <!--  VIEW 5: Captain Dash  -->
+    <!-- ====================== -->
+    <div id="dashboard-view" class="hidden">
+      <div class="cap-header">
+        <div>
+          <div class="logo" style="font-size:0.7rem; font-weight:600; letter-spacing:0.15em; text-transform:uppercase; color:var(--text-muted); margin-bottom:0.3rem">Panel del Capitán <span class="watermark-inline">by ballestitaa</span></div>
+          <h1 id="dash-name"></h1>
+        </div>
+        <div style="display:flex; align-items:center; gap:0.75rem">
+          <div class="pin-badge">PIN: <strong id="dash-pin"></strong></div>
+          <button class="btn btn-secondary" id="logout-btn" style="font-size:0.8rem">Salir</button>
+        </div>
+      </div>
+
+      <!-- Create new room -->
+      <div class="card" style="margin-bottom:1.5rem">
+        <div class="card-header" style="margin-bottom:0.75rem">
+          <h3>Crear nueva sala</h3>
+        </div>
+        <div class="input-group">
+          <input type="text" id="new-room-name" placeholder="Nombre del equipo / torneo" maxlength="40" autocomplete="off">
+          <button class="btn btn-primary" id="create-room-btn">Crear</button>
+        </div>
+      </div>
+
+      <!-- Room list -->
+      <div class="card">
+        <div class="card-header">
+          <h3>Tus salas</h3>
+          <span class="text-secondary" style="font-size:0.8rem" id="room-count-label"></span>
+        </div>
+        <div class="room-list" id="room-list"></div>
+      </div>
+
+      <!-- Room created toast -->
+      <div id="room-created-toast" class="hidden" style="position:fixed; bottom:1.5rem; left:50%; transform:translateX(-50%); background:var(--card); border:1px solid var(--border-light); border-radius:var(--radius); padding:1rem 1.5rem; z-index:100; box-shadow:0 8px 30px rgba(0,0,0,0.5); max-width:420px; width:90%">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.75rem">
+          <span style="font-weight:600; font-size:0.9rem">✓ Sala creada</span>
+          <button class="btn-icon" id="close-toast" style="width:28px; height:28px; font-size:0.8rem">✕</button>
+        </div>
+        <p class="label" style="margin-bottom:0.3rem">Enlace para jugadores</p>
+        <div class="link-box" style="margin-bottom:0.25rem">
+          <span id="toast-player-link"></span>
+          <button class="btn-icon" id="copy-toast-link" title="Copiar"></button>
+        </div>
+        <div class="copy-feedback" id="toast-copy-feedback">✓ Copiado</div>
+      </div>
+
+      <footer class="watermark">ballestitaa</footer>
+    </div>
+  </div>
+
+  <script>
+    // --- Monochrome SVG icons ---
+    const ICONS = {
+      copy: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>',
+      link: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>',
+      chart: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>',
+      trash: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>',
+      clipboard: '<svg class="icon icon-md" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>',
+    };
+
+    const $ = (s) => document.querySelector(s);
+
+    $('#copy-toast-link').innerHTML = ICONS.copy;
+
+    // --- State ---
+    let currentPin = null;
+    let currentCapitan = null;
+
+    // --- View management ---
+    const VIEWS = ['role', 'auth', 'pin-reveal', 'player', 'dashboard'];
+    function showView(name) {
+      VIEWS.forEach(v => {
+        $(`#${v}-view`).classList.toggle('hidden', v !== name);
+      });
+    }
+
+    // --- ROLE SELECT ---
+    $('#role-captain').addEventListener('click', () => showView('auth'));
+    $('#role-player').addEventListener('click', () => showView('player'));
+    $('#back-to-role').addEventListener('click', () => showView('role'));
+    $('#back-to-role-2').addEventListener('click', () => showView('role'));
+
+    // --- CAPTAIN LOGIN ---
+    $('#login-btn').addEventListener('click', loginCapitan);
+    $('#login-pin').addEventListener('keydown', (e) => { if (e.key === 'Enter') loginCapitan(); });
+
+    async function loginCapitan() {
+      const pin = $('#login-pin').value.trim().toUpperCase();
+      if (!pin) { $('#login-pin').focus(); return; }
+
+      const errEl = $('#login-error');
+      errEl.style.display = 'none';
+
+      try {
+        const res = await fetch(`/api/capitanes/${pin}`);
+        if (!res.ok) throw new Error('PIN no encontrado');
+        const data = await res.json();
+
+        currentPin = pin;
+        currentCapitan = data;
+        showDashboard(data);
+      } catch (err) {
+        errEl.textContent = err.message;
+        errEl.style.display = 'block';
+      }
+    }
+
+    // --- CAPTAIN REGISTER ---
+    $('#register-btn').addEventListener('click', registerCapitan);
+    $('#register-name').addEventListener('keydown', (e) => { if (e.key === 'Enter') registerCapitan(); });
+
+    async function registerCapitan() {
+      const nombre = $('#register-name').value.trim();
+      if (!nombre) { $('#register-name').focus(); return; }
+
+      const btn = $('#register-btn');
+      btn.disabled = true;
+
+      try {
+        const res = await fetch('/api/capitanes', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ nombre })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+
+        currentPin = data.pin;
+
+        $('#reveal-name').textContent = data.nombre;
+        $('#reveal-pin').textContent = data.pin;
+        showView('pin-reveal');
+
+        $('#reveal-pin').onclick = async () => {
+          try {
+            await navigator.clipboard.writeText(data.pin);
+            $('#reveal-pin').style.opacity = '0.5';
+            setTimeout(() => $('#reveal-pin').style.opacity = '1', 600);
+          } catch {}
+        };
+
+        $('#reveal-continue').onclick = async () => {
+          const r = await fetch(`/api/capitanes/${data.pin}`);
+          currentCapitan = await r.json();
+          showDashboard(currentCapitan);
+        };
+      } catch (err) {
+        alert('Error: ' + err.message);
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    // --- PLAYER JOIN ---
+    $('#join-btn').addEventListener('click', () => {
+      const code = $('#join-code').value.trim().toUpperCase();
+      if (!code) { $('#join-code').focus(); return; }
+      window.location.href = `/jugador.html?sala=${code}`;
+    });
+    $('#join-code').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#join-btn').click(); });
+
+    // --- CAPTAIN DASHBOARD ---
+    function showDashboard(data) {
+      $('#dash-name').textContent = data.nombre;
+      $('#dash-pin').textContent = data.pin;
+      renderRoomList(data.salas);
+      showView('dashboard');
+    }
+
+    function renderRoomList(rooms) {
+      const list = $('#room-list');
+      $('#room-count-label').textContent = `${rooms.length} sala${rooms.length !== 1 ? 's' : ''}`;
+
+      if (rooms.length === 0) {
+        list.innerHTML = `
+          <div class="empty-state">
+            <div class="icon">${ICONS.clipboard}</div>
+            <p>No tienes salas creadas aún</p>
+          </div>`;
+        return;
+      }
+
+      list.innerHTML = '';
+
+      [...rooms].reverse().forEach(room => {
+        const card = document.createElement('div');
+        card.className = 'room-card';
+
+        const fecha = new Date(room.creadoEn);
+        const fechaStr = fecha.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
+
+        card.innerHTML = `
+          <div class="room-code">${room.codigo}</div>
+          <div class="room-info">
+            <h3>${escapeHtml(room.nombre)}</h3>
+            <span>${room.jugadores} jugador${room.jugadores !== 1 ? 'es' : ''} · ${fechaStr}</span>
+          </div>
+          <div class="room-actions">
+            <button class="btn-icon copy-link-btn" title="Copiar enlace de jugadores">${ICONS.link}</button>
+            <button class="btn-icon panel-btn" title="Ir al panel">${ICONS.chart}</button>
+            <button class="btn-icon delete-room-btn" title="Eliminar sala" style="color:var(--danger)">${ICONS.trash}</button>
+          </div>
+        `;
+
+        const base = window.location.origin;
+        const playerLink = `${base}/jugador.html?sala=${room.codigo}`;
+        const panelLink = `${base}/panel.html?sala=${room.codigo}&clave=${room.claveAdmin}`;
+
+        card.querySelector('.copy-link-btn').addEventListener('click', async (e) => {
+          e.stopPropagation();
+          try {
+            await navigator.clipboard.writeText(playerLink);
+            const btn = e.currentTarget;
+            btn.innerHTML = '✓';
+            setTimeout(() => btn.innerHTML = ICONS.link, 1500);
+          } catch {
+            prompt('Copia este enlace:', playerLink);
+          }
+        });
+
+        card.querySelector('.panel-btn').addEventListener('click', (e) => {
+          e.stopPropagation();
+          window.location.href = panelLink;
+        });
+
+        card.addEventListener('click', () => {
+          window.location.href = panelLink;
+        });
+
+        card.querySelector('.delete-room-btn').addEventListener('click', async (e) => {
+          e.stopPropagation();
+          if (!confirm(`¿Eliminar la sala "${room.nombre}"?`)) return;
+          try {
+            const res = await fetch(`/api/salas/${room.codigo}?clave=${room.claveAdmin}`, { method: 'DELETE' });
+            if (!res.ok) throw new Error();
+            await refreshDashboard();
+          } catch {
+            alert('Error al eliminar la sala');
+          }
+        });
+
+        list.appendChild(card);
+      });
+    }
+
+    // --- CREATE ROOM ---
+    $('#create-room-btn').addEventListener('click', createRoom);
+    $('#new-room-name').addEventListener('keydown', (e) => { if (e.key === 'Enter') createRoom(); });
+
+    async function createRoom() {
+      const nombre = $('#new-room-name').value.trim();
+      if (!nombre) { $('#new-room-name').focus(); return; }
+
+      const btn = $('#create-room-btn');
+      btn.disabled = true;
+      btn.textContent = 'Creando…';
+
+      try {
+        const res = await fetch('/api/salas', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ nombre, pin: currentPin })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+
+        $('#new-room-name').value = '';
+
+        const base = window.location.origin;
+        const playerLink = `${base}/jugador.html?sala=${data.codigo}`;
+        showToast(playerLink);
+
+        await refreshDashboard();
+      } catch (err) {
+        alert('Error: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Crear';
+      }
+    }
+
+    // --- Toast ---
+    function showToast(playerLink) {
+      const toast = $('#room-created-toast');
+      $('#toast-player-link').textContent = playerLink;
+      toast.classList.remove('hidden');
+
+      $('#copy-toast-link').onclick = async () => {
+        try {
+          await navigator.clipboard.writeText(playerLink);
+          const fb = $('#toast-copy-feedback');
+          fb.classList.add('show');
+          setTimeout(() => fb.classList.remove('show'), 2000);
+        } catch {
+          prompt('Copia:', playerLink);
+        }
+      };
+
+      $('#close-toast').onclick = () => toast.classList.add('hidden');
+      setTimeout(() => toast.classList.add('hidden'), 10000);
+    }
+
+    // --- Refresh ---
+    async function refreshDashboard() {
+      try {
+        const res = await fetch(`/api/capitanes/${currentPin}`);
+        if (!res.ok) throw new Error();
+        currentCapitan = await res.json();
+        renderRoomList(currentCapitan.salas);
+      } catch {}
+    }
+
+    // --- Logout ---
+    $('#logout-btn').addEventListener('click', () => {
+      currentPin = null;
+      currentCapitan = null;
+      showView('role');
+    });
+
+    // --- Utils ---
+    function escapeHtml(str) {
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+  </script>
+</body>
+</html>
